@@ -1,12 +1,37 @@
 #pragma once
 
-//#include <JuceHeader.h>
+#include <JuceHeader.h>
+
 
 //==============================================================================
 /*
     This component lives inside our window, and this is where you should put all
     your controls and content.
 */
+class DecibelSlider : public juce::Slider{
+public:
+    DecibelSlider() {}
+    
+    double getValueFromText (const juce::String& text) override{
+        
+        auto minusInfinitydB = -100.0;
+        
+        auto decibelText = text.upToFirstOccurrenceOf ("dB", false, false).trim();
+        
+        return decibelText.equalsIgnoreCase ("-INF") ? minusInfinitydB
+        : decibelText.getDoubleValue();
+    }
+    
+    juce::String getTextFromValue (double value) override {
+        return juce::Decibels::toString (value);
+    }
+    
+private:
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DecibelSlider)
+    
+};
+
+
 class MainComponent  : public juce::AudioAppComponent,
 public juce::ChangeListener
 {
@@ -20,6 +45,12 @@ public:
         titleLabel.setText ("Play sound from existing file", juce::dontSendNotification);
         titleLabel.setColour (juce::Label::textColourId, juce::Colours::white);
         titleLabel.setJustificationType (juce::Justification::centred);
+        
+        addAndMakeVisible(titleLabel_2);
+        titleLabel_2.setFont (juce::Font (16.0f, juce::Font::bold));
+        titleLabel_2.setText ("Sound playing from device", juce::dontSendNotification);
+        titleLabel_2.setColour (juce::Label::textColourId, juce::Colours::white);
+        titleLabel_2.setJustificationType (juce::Justification::centred);
         
         addAndMakeVisible (&openButton);
         openButton.setButtonText ("Open...");
@@ -37,12 +68,23 @@ public:
         stopButton.setColour (juce::TextButton::buttonColourId, juce::Colours::red);
         stopButton.setEnabled (false);
         
+        decibelSlider.setRange (20, 20000);
+        decibelSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 100, 20);
+        decibelSlider.onValueChange = [this] {level = juce::Decibels::decibelsToGain ((float) decibelSlider.getValue()); };
+        decibelSlider.setValue (juce::Decibels::gainToDecibels (level));
+        decibelLabel.setText ("Volume in dB", juce::dontSendNotification);
+        
+        addAndMakeVisible (decibelSlider);
+        addAndMakeVisible (decibelLabel);
+        
+
+        
         setSize(800, 500);
         
         formatManager.registerBasicFormats();
         transportSource.addChangeListener (this);   
         
-        setAudioChannels(0, 2);
+        setAudioChannels(2, 2);
     }
 
     ~MainComponent() override
@@ -59,11 +101,50 @@ public:
 
     void getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill) override
     {
+        auto* device = deviceManager.getCurrentAudioDevice();
+        auto activeInputChannels = device->getActiveInputChannels();
+        auto activeOutputChannels = device->getActiveOutputChannels();
+        auto maxInputChannels = activeInputChannels.getHighestBit() + 1;
+        auto maxOutputChannels = activeOutputChannels.getHighestBit() +1;
+        
+//        auto level = (float) levelSlider.getValue();
+        
+        auto currentLevel = level;
+        auto levelScale = currentLevel * 2.0f;
+        
         if (readerSource.get() == nullptr){
             bufferToFill.clearActiveBufferRegion();
             return;
         }
         transportSource.getNextAudioBlock (bufferToFill);
+        
+//        for (auto channel = 0; channel < bufferToFill.buffer->getNumChannels(); ++channel){
+//            auto* buffer = bufferToFill.buffer->getWritePointer (channel, bufferToFill.startSample);
+//
+//            for (auto sample = 0; sample < bufferToFill.numSamples; ++sample) {
+//                buffer[sample] = random.nextFloat() * levelScale - currentLevel;
+//            }
+//        }
+        
+        for (auto channel = 0; channel < maxOutputChannels; ++channel){
+            if ((! activeOutputChannels[channel]) || maxInputChannels == 0){
+                bufferToFill.buffer->clear (channel, bufferToFill.startSample, bufferToFill.numSamples);
+            }
+            else {
+//                auto actualInputChannel = channel % maxInputChannels;
+
+                if(! activeInputChannels[channel]){
+                    bufferToFill.buffer->clear (channel, bufferToFill.startSample, bufferToFill.numSamples);
+                }
+                else{
+                    //auto* inBuffer = bufferToFill.buffer->getReadPointer (actualInputChannel, bufferToFill.startSample);
+                    auto* outBuffer = bufferToFill.buffer->getWritePointer (channel, bufferToFill.startSample);
+                    for (auto sample = 0; sample < bufferToFill.numSamples; ++sample){
+                        outBuffer[sample] = random.nextFloat() * levelScale - currentLevel;
+                    }
+                }
+            }
+        }
     }
     
     void releaseResources() override {
@@ -74,9 +155,13 @@ public:
     void resized() override
     {
         titleLabel.setBounds (10, 10, getWidth()/2 - 10, 20);
+        titleLabel_2.setBounds (getWidth()/2, 10, getWidth()/2 - 10, 20);
         openButton.setBounds (10, 40, getWidth()/2 - 10, 20);
         playButton.setBounds (10, 70, getWidth()/2 - 10, 20);
         stopButton.setBounds (10, 100, getWidth()/2 - 10, 20);
+        decibelLabel.setBounds (getWidth()/2, 40, getWidth()/2 - 10, 20);
+        decibelSlider.setBounds (getWidth()/2, 70, getWidth()/2 - 10, 20);
+
     }
     
     void changeListenerCallback (juce::ChangeBroadcaster* source) override {
@@ -151,10 +236,17 @@ private:
     void stopButtonClicked() {changeState (Stopping);};
     
     juce::Label titleLabel;
+    juce::Label titleLabel_2;
     
     juce::TextButton openButton;
     juce::TextButton playButton;
     juce::TextButton stopButton;
+    
+    juce::Random random;
+    DecibelSlider decibelSlider;
+    juce::Label decibelLabel;
+    float level = 0.0f;
+
     
     std::unique_ptr<juce::FileChooser> chooser;
     
