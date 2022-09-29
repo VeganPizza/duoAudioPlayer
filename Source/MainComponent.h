@@ -33,7 +33,8 @@ private:
 
  */
 class MainComponent  : public juce::AudioAppComponent,
-public juce::ChangeListener
+public juce::ChangeListener,
+public juce::Slider::Listener
 {
 public:
     //==============================================================================
@@ -55,6 +56,19 @@ public:
         titleLabel_2.setJustificationType (juce::Justification::centred);
         
         //buttons & sliders for existing file
+        
+        addAndMakeVisible (frequencySlider1);
+        frequencySlider1.setRange (20, 20000.0);
+        frequencySlider1.setTextValueSuffix (" Hz");
+        frequencySlider1.addListener (this);
+        frequencySlider1.onValueChange = [this] {sliderValueChanged(&frequencySlider1);};
+        addAndMakeVisible(frequencyLabel1);
+        frequencyLabel1.setText("Frequency 1", juce::dontSendNotification);
+        frequencyLabel1.attachToComponent(&frequencySlider1, true);
+        
+        frequencySlider1.setValue(500);
+        
+        
         addAndMakeVisible (&openButton);
         openButton.setButtonText ("Open...");
         openButton.onClick = [this] { openButtonClicked(); };
@@ -72,6 +86,17 @@ public:
         stopButton.setEnabled (false);
         
         //buttons & sliders for input channels
+        
+        addAndMakeVisible (frequencySlider2);
+        frequencySlider2.setRange (20, 20000.0);
+        frequencySlider2.setTextValueSuffix (" Hz");
+        frequencySlider2.addListener (this);
+        frequencySlider2.onValueChange = [this] {sliderValueChanged(&frequencySlider2);};
+        addAndMakeVisible(frequencyLabel2);
+        frequencyLabel2.setText("Frequency 2", juce::dontSendNotification);
+        frequencyLabel2.attachToComponent(&frequencySlider2, true);
+        
+        frequencySlider2.setValue(500);
 
         deviceManager.initialise(2, 2, nullptr, true);
         audioSettings.reset(new juce::AudioDeviceSelectorComponent(deviceManager, 0, 2, 0, 2, true, true, true, true));
@@ -116,13 +141,23 @@ public:
 
     void resized() override
     {
+        //auto sliderLeft = 10;
+        
         titleLabel.setBounds (10, 10, getWidth()/2 - 10, 20);
         titleLabel_2.setBounds (getWidth()/2, 10, getWidth()/2 - 10, 20);
+        
+        frequencySlider1.setBounds(100, 30, getWidth()/3, 20);
+        frequencySlider2.setBounds(getWidth()/2 + 100, 30, getWidth()/3, 20);
+        
         openButton.setBounds (10, getHeight() - 90, getWidth()/2 - 10, 20);
         playButton.setBounds (10, getHeight() - 60, getWidth()/2 - 10, 20);
         stopButton.setBounds (10, getHeight() - 30, getWidth()/2 - 10, 20);
         audioSettings->setBounds (getWidth()/2, getHeight()/2 - 100, getWidth()/2 - 10, 100);
 
+    }
+    
+    void sliderValueChanged (juce::Slider* slider) override {
+        slider->setValue(slider->getValue(), juce::dontSendNotification);
     }
     
     void changeListenerCallback (juce::ChangeBroadcaster* source) override {
@@ -199,11 +234,18 @@ private:
     juce::Label titleLabel;
     juce::Label titleLabel_2;
     
+    
+    //sliders
+    juce::Slider frequencySlider1;
+    juce::Label frequencyLabel1;
+    
+    juce::Slider frequencySlider2;
+    juce::Label frequencyLabel2;
+    
     juce::TextButton openButton;
     juce::TextButton playButton;
     juce::TextButton stopButton;
     
-
     
     std::unique_ptr<juce::FileChooser> chooser;
     
